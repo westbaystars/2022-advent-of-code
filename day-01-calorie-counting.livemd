@@ -1,9 +1,17 @@
+<!-- livebook:{"persist_outputs":true} -->
+
 # 2023 Advent of Code Day 1
 
 ```elixir
 Mix.install([
   {:kino, "~> 0.7.0"}
 ])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
 ```
 
 ## Calorie Counting
@@ -71,9 +79,16 @@ summaries =
   Kino.Input.read(input)
   |> String.split("\n\n")
   |> Enum.into([], &Convert.sum_values(&1))
-  |> Enum.filter(fn x -> not is_nil(x) end)
-  |> Enum.with_index(fn x, index -> {index + 1, x} end)
-  |> Enum.sort(fn {_k1, c1}, {_k2, c2} -> c1 >= c2 end)
+  # Indexing the elves is added, unnecessary complexity
+  # |> Enum.with_index(fn x, index -> {index + 1, x} end)
+  # |> Enum.sort(fn {_k1, c1}, {_k2, c2} -> c1 >= c2 end)
+  |> Enum.sort(:desc)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[24000, 11000, 10000, 6000, 4000]
 ```
 
 Your puzzle answer was 66186.
@@ -93,5 +108,11 @@ Find the top three Elves carrying the most Calories. **How many Calories are tho
 {top_3, _rest} = Enum.split(summaries, 3)
 
 top_3
-|> Enum.reduce(0, fn {_elf, calories}, acc -> calories + acc end)
+|> Enum.reduce(0, fn calories, acc -> calories + acc end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+45000
 ```
