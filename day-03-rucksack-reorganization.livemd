@@ -1,0 +1,180 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# 2023 Advent of Code Day 3
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.7.0"},
+  {:explorer, "~> 0.4.0"}
+])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Resolving Hex dependencies...
+Dependency resolution completed:
+New:
+  castore 0.1.19
+  explorer 0.4.0
+  jason 1.4.0
+  kino 0.7.0
+  rustler 0.26.0
+  rustler_precompiled 0.5.4
+  table 0.1.2
+  table_rex 3.1.1
+  toml 0.7.0
+* Getting kino (Hex package)
+* Getting explorer (Hex package)
+* Getting rustler (Hex package)
+* Getting rustler_precompiled (Hex package)
+* Getting table (Hex package)
+* Getting table_rex (Hex package)
+* Getting castore (Hex package)
+* Getting jason (Hex package)
+* Getting toml (Hex package)
+==> table
+Compiling 5 files (.ex)
+Generated table app
+==> toml
+Compiling 10 files (.ex)
+Generated toml app
+==> kino
+Compiling 36 files (.ex)
+Generated kino app
+==> jason
+Compiling 10 files (.ex)
+Generated jason app
+==> rustler
+Compiling 7 files (.ex)
+Generated rustler app
+==> table_rex
+Compiling 7 files (.ex)
+Generated table_rex app
+==> castore
+Compiling 1 file (.ex)
+Generated castore app
+==> rustler_precompiled
+Compiling 4 files (.ex)
+Generated rustler_precompiled app
+==> explorer
+Compiling 19 files (.ex)
+
+20:22:01.438 [debug] Copying NIF from cache and extracting to /Users/westbay/Library/Caches/mix/installs/elixir-1.14.0-erts-13.0.3/bbb5318f8482238e07e6b53f73313b9a/_build/dev/lib/explorer/priv/native/libexplorer-v0.4.0-nif-2.16-x86_64-apple-darwin.so
+Generated explorer app
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+## Rucksack Reorganization
+
+One Elf has the important job of loading all of the rucksacks with supplies for the jungle journey. Unfortunately, that Elf didn't quite follow the packing instructions, and so a few items now need to be rearranged.
+
+Each rucksack has two large compartments. All items of a given type are meant to go into exactly one of the two compartments. The Elf that did the packing failed to follow this rule for exactly one item type per rucksack.
+
+The Elves have made a list of all of the items currently in each rucksack (your puzzle input), but they need your help finding the errors. Every item type is identified by a single lowercase or uppercase letter (that is, a and A refer to different types of items).
+
+The list of items for each rucksack is given as characters all on a single line. A given rucksack always has the same number of items in each of its two compartments, so the first half of the characters represent items in the first compartment, while the second half of the characters represent items in the second compartment.
+
+For example, suppose you have the following list of contents from six rucksacks:
+
+```
+vJrwpWtwJgWrhcsFMMfFFhFp
+jqHRNqRjqzjGDLGLrsFMfFZSrLrFZsSL
+PmmdzqPrVvPwwTWBwg
+wMqvLMZHhHMvwLHjbvcjnnSBnvTQFn
+ttgJtRGJQctTZtZT
+CrZsJsPPZsGzwwsLwLmpwMDw
+```
+
+* The first rucksack contains the items vJrwpWtwJgWrhcsFMMfFFhFp, which means its first compartment contains the items vJrwpWtwJgWr, while the second compartment contains the items hcsFMMfFFhFp. The only item type that appears in both compartments is lowercase p.
+* The second rucksack's compartments contain jqHRNqRjqzjGDLGL and rsFMfFZSrLrFZsSL. The only item type that appears in both compartments is uppercase L.
+* The third rucksack's compartments contain PmmdzqPrV and vPwwTWBwg; the only common item type is uppercase P.
+* The fourth rucksack's compartments only share item type v.
+* The fifth rucksack's compartments only share item type t.
+* The sixth rucksack's compartments only share item type s.
+
+To help prioritize item rearrangement, every item type can be converted to a priority:
+
+Lowercase item types a through z have priorities 1 through 26.
+Uppercase item types A through Z have priorities 27 through 52.
+
+In the above example, the priority of the item type that appears in both compartments of each rucksack is 16 (p), 38 (L), 42 (P), 22 (v), 20 (t), and 19 (s); the sum of these is 157.
+
+Find the item type that appears in both compartments of each rucksack. What is the sum of the priorities of those item types?
+
+## Read in Ledger of Calories
+
+```elixir
+frame = Kino.Frame.new() |> Kino.render()
+
+input = Kino.Input.textarea("strategy")
+```
+
+```elixir
+defmodule Priorities do
+  def split_in_half(items) do
+    point = String.length(items) |> Integer.floor_div(2)
+    String.split_at(items, point)
+  end
+
+  def find_dup({comp_1, comp_2}) do
+    [
+      comp_1 |> String.codepoints() |> Enum.sort() |> Enum.dedup(),
+      comp_2 |> String.codepoints() |> Enum.sort() |> Enum.dedup()
+    ]
+    |> Enum.concat()
+    |> Enum.frequencies()
+    |> Enum.flat_map(fn item ->
+      case item do
+        {key, 2} -> [key]
+        _ -> []
+      end
+    end)
+  end
+
+  def sum_of_values(items, values) do
+    items
+    |> Enum.reduce(0, fn item, acc ->
+      IO.inspect(%{item: item, acc: acc})
+      acc + values[item]
+    end)
+  end
+end
+
+values =
+  [?a..?z |> Enum.to_list(), ?A..?Z |> Enum.to_list()]
+  |> Enum.concat()
+  |> List.to_string()
+  |> String.codepoints()
+  |> Enum.zip(Enum.to_list(1..52))
+  |> Enum.into(%{})
+
+Kino.Input.read(input)
+|> String.split("\n")
+|> Enum.into([], &Priorities.split_in_half(&1))
+|> Enum.into([], &Priorities.find_dup(&1))
+|> Enum.into([], &Priorities.sum_of_values(&1, values))
+|> Enum.reduce(0, fn x, acc -> x + acc end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%{acc: 0, item: "p"}
+%{acc: 0, item: "L"}
+%{acc: 0, item: "P"}
+%{acc: 0, item: "v"}
+%{acc: 0, item: "t"}
+%{acc: 0, item: "s"}
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+157
+```
