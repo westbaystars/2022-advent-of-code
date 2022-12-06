@@ -1,0 +1,266 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# 2023 Advent of Code Day 5
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.7.0"},
+  {:explorer, "~> 0.4.0"}
+])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+## Supply Stacks
+
+The expedition can depart as soon as the final supplies have been unloaded from the ships. Supplies are stored in stacks of marked crates, but because the needed supplies are buried under many other crates, the crates need to be rearranged.
+
+The ship has a giant cargo crane capable of moving crates between stacks. To ensure none of the crates get crushed or fall over, the crane operator will rearrange them in a series of carefully-planned steps. After the crates are rearranged, the desired crates will be at the top of each stack.
+
+The Elves don't want to interrupt the crane operator during this delicate procedure, but they forgot to ask her which crate will end up where, and they want to be ready to unload them as soon as possible so they can embark.
+
+They do, however, have a drawing of the starting stacks of crates and the rearrangement procedure (your puzzle input). For example:
+
+```
+    [D]    
+[N] [C]    
+[Z] [M] [P]
+ 1   2   3 
+
+move 1 from 2 to 1
+move 3 from 1 to 3
+move 2 from 2 to 1
+move 1 from 1 to 2
+```
+
+In this example, there are three stacks of crates. Stack 1 contains two crates: crate Z is on the bottom, and crate N is on top. Stack 2 contains three crates; from bottom to top, they are crates M, C, and D. Finally, stack 3 contains a single crate, P.
+
+Then, the rearrangement procedure is given. In each step of the procedure, a quantity of crates is moved from one stack to a different stack. In the first step of the above rearrangement procedure, one crate is moved from stack 2 to stack 1, resulting in this configuration:
+
+```
+[D]        
+[N] [C]    
+[Z] [M] [P]
+ 1   2   3 
+```
+
+In the second step, three crates are moved from stack 1 to stack 3. Crates are moved one at a time, so the first crate to be moved (D) ends up below the second and third crates:
+
+```
+        [Z]
+        [N]
+    [C] [D]
+    [M] [P]
+ 1   2   3
+```
+
+Then, both crates are moved from stack 2 to stack 1. Again, because crates are moved one at a time, crate C ends up below crate M:
+
+```
+        [Z]
+        [N]
+[M]     [D]
+[C]     [P]
+ 1   2   3
+```
+
+Finally, one crate is moved from stack 1 to stack 2:
+
+```
+        [Z]
+        [N]
+        [D]
+[C] [M] [P]
+ 1   2   3
+```
+
+The Elves just need to know which crate will end up on top of each stack; in this example, the top crates are C in stack 1, M in stack 2, and Z in stack 3, so you should combine these together and give the Elves the message CMZ.
+
+After the rearrangement procedure completes, what crate ends up on top of each stack?
+
+## Read in the Data
+
+```elixir
+frame = Kino.Frame.new() |> Kino.render()
+
+input = Kino.Input.textarea("strategy")
+```
+
+1. Read in data
+2. Break up data into stacks and instructions
+3. Arrange each column into stack structure
+4. Process instructions
+5. Pop off the top of each stack for answer
+
+```elixir
+defmodule Stack do
+  @moduledoc """
+  Stack is a stack of values
+  """
+
+  @typedoc "a value stored on the stack"
+  @type value :: any
+
+  @typedoc "a stack"
+  @type t :: %Stack{array: [value]}
+  defstruct array: []
+
+  @doc """
+  Return a new Stack
+  """
+  @spec new() :: Stack.t()
+  def new do
+    %Stack{}
+  end
+
+  @doc """
+  Return the size of the Stack
+  """
+  @spec size(Stack.t()) :: non_neg_integer
+  def size(%Stack{array: array}) do
+    length(array)
+  end
+
+  @doc """
+  Push a value onto the Stack
+  """
+  @spec push(Stack.t(), value) :: Stack.t()
+  def push(%Stack{array: array}, item) do
+    %Stack{array: [item | array]}
+  end
+
+  @doc """
+  Pop the last value off the Stack
+  """
+  @spec pop(Stack.t()) :: {value, Stack.t()}
+  def pop(%Stack{array: [item | rest]}) do
+    {item, %Stack{array: rest}}
+  end
+
+  def pop(stack = %Stack{array: []}) do
+    {nil, stack}
+  end
+end
+
+defmodule Stacker do
+  def divide_data(string) do
+    [stacks, instructions] = String.split(string, "\n\n")
+
+    %{
+      stacks: stacks |> String.split("\n"),
+      instructions: instructions |> String.split("\n")
+    }
+  end
+
+  def break_into_stacks(%{stacks: stacks, instructions: instructions}) do
+    %{
+      stacks:
+        Enum.into(stacks, [], fn stack -> stack(stack) end)
+        |> Enum.reverse()
+        |> make_stacks(),
+      instructions: instructions
+    }
+  end
+
+  defp stack(string, into \\ [])
+  defp stack("", into), do: into
+
+  defp stack(string, into) do
+    {value, rest} = String.split_at(string, 4)
+    stack(rest, List.flatten([into, String.trim(value)]))
+  end
+
+  defp make_stacks(array) do
+    {labels, rest} = List.pop_at(array, 0)
+
+    stacks =
+      labels
+      |> Enum.into([], fn key -> {key, Stack.new()} end)
+      |> Map.new()
+
+    insert_stacks(stacks, labels, rest)
+  end
+
+  defp insert_stacks(stacks, _labels, []), do: stacks
+
+  defp insert_stacks(stacks, labels, records) do
+    {record, rest} = List.pop_at(records, 0)
+
+    record
+    |> Enum.zip_reduce(labels, stacks, fn r, l, s ->
+      stack =
+        Map.get(s, l)
+        |> push_crate(r)
+
+      Map.put(s, l, stack)
+    end)
+    |> insert_stacks(labels, rest)
+  end
+
+  defp push_crate(stack, ""), do: stack
+  defp push_crate(stack, crate), do: Stack.push(stack, crate)
+
+  def process_instructions(%{stacks: stacks, instructions: instructions}) do
+    do_instruction(stacks, List.pop_at(instructions, 0))
+  end
+
+  defp do_instruction(stacks, {nil, _}), do: stacks
+
+  defp do_instruction(stacks, {instruction, rest}) do
+    %{"quantity" => quantity, "from" => from, "to" => to} =
+      Regex.named_captures(~r/move (?<quantity>\d+) from (?<from>\d+) to (?<to>\d+)/, instruction)
+
+    times = String.to_integer(quantity)
+
+    move(stacks, from, to, times)
+    |> do_instruction(List.pop_at(rest, 0))
+  end
+
+  defp move(stacks, _from, _to, 0), do: stacks
+
+  defp move(stacks, from, to, times) do
+    {value, stacks} = Map.get_and_update(stacks, from, fn stack -> Stack.pop(stack) end)
+
+    Map.update!(stacks, to, fn stack -> Stack.push(stack, value) end)
+    |> move(from, to, times - 1)
+  end
+end
+
+# Read in data
+# Read in data
+results =
+  Kino.Input.read(input)
+  # Break up data into stacks and instructions
+  |> Stacker.divide_data()
+  # Arrange each column into stack structure
+  |> Stacker.break_into_stacks()
+  # Process instructions
+  |> Stacker.process_instructions()
+
+# |> Stacker.top_values()           # Pop off the top of each stack for answer
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%{
+  "1" => %Stack{array: ["[V]"]},
+  "2" => %Stack{
+    array: ["[W]", "[R]", "[B]", "[N]", "[H]", "[F]", "[M]", "[F]", "[T]", "[S]", "[Z]", "[C]",
+     "[Q]", "[C]", "[G]", "[C]", "[L]"]
+  },
+  "3" => %Stack{array: ["[L]", "[Z]", "[V]"]},
+  "4" => %Stack{array: ["[C]", "[C]"]},
+  "5" => %Stack{array: ["[W]"]},
+  "6" => %Stack{
+    array: ["[G]", "[M]", "[D]", "[B]", "[N]", "[C]", "[S]", "[L]", "[G]", "[D]", "[L]", "[F]"]
+  },
+  "7" => %Stack{array: ["[S]", "[P]", "[M]", "[Z]"]},
+  "8" => %Stack{array: ["[D]", "[D]", "[W]", "[P]", "[N]", "[V]", "[D]", "[W]"]},
+  "9" => %Stack{array: ["[Q]", "[R]", "[P]", "[P]", "[P]", "[G]", "[Q]", "[V]"]}
+}
+```
