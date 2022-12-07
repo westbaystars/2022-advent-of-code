@@ -1,0 +1,357 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# 2023 Advent of Code Day 7
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.7.0"},
+  {:explorer, "~> 0.4.0"},
+  {:machinery, "~> 1.0.0"}
+])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Resolving Hex dependencies...
+Dependency resolution completed:
+New:
+  castore 0.1.19
+  decimal 2.0.0
+  ecto 3.9.2
+  explorer 0.4.0
+  jason 1.4.0
+  kino 0.7.0
+  machinery 1.0.0
+  rustler 0.26.0
+  rustler_precompiled 0.5.4
+  table 0.1.2
+  table_rex 3.1.1
+  telemetry 1.1.0
+  toml 0.7.0
+* Getting kino (Hex package)
+* Getting explorer (Hex package)
+* Getting machinery (Hex package)
+* Getting ecto (Hex package)
+* Getting decimal (Hex package)
+* Getting telemetry (Hex package)
+* Getting rustler (Hex package)
+* Getting rustler_precompiled (Hex package)
+* Getting table (Hex package)
+* Getting table_rex (Hex package)
+* Getting castore (Hex package)
+* Getting jason (Hex package)
+* Getting toml (Hex package)
+==> decimal
+Compiling 4 files (.ex)
+Generated decimal app
+==> table
+Compiling 5 files (.ex)
+Generated table app
+==> toml
+Compiling 10 files (.ex)
+Generated toml app
+==> kino
+Compiling 36 files (.ex)
+Generated kino app
+===> Analyzing applications...
+===> Compiling telemetry
+==> jason
+Compiling 10 files (.ex)
+Generated jason app
+==> ecto
+Compiling 56 files (.ex)
+Generated ecto app
+==> rustler
+Compiling 7 files (.ex)
+Generated rustler app
+==> table_rex
+Compiling 7 files (.ex)
+Generated table_rex app
+==> castore
+Compiling 1 file (.ex)
+Generated castore app
+==> rustler_precompiled
+Compiling 4 files (.ex)
+Generated rustler_precompiled app
+==> explorer
+Compiling 19 files (.ex)
+
+18:36:13.527 [debug] Copying NIF from cache and extracting to /Users/westbay/Library/Caches/mix/installs/elixir-1.14.0-erts-13.0.3/7f50267d9837662a380f2f18e3e683d7/_build/dev/lib/explorer/priv/native/libexplorer-v0.4.0-nif-2.16-x86_64-apple-darwin.so
+Generated explorer app
+==> machinery
+Compiling 3 files (.ex)
+Generated machinery app
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+## No Space Left on Device
+
+You can hear birds chirping and raindrops hitting leaves as the expedition proceeds. Occasionally, you can even hear much louder sounds in the distance; how big do the animals get out here, anyway?
+
+The device the Elves gave you has problems with more than just its communication system. You try to run a system update:
+
+```
+$ system-update --please --pretty-please-with-sugar-on-top
+Error: No space left on device
+```
+
+Perhaps you can delete some files to make space for the update?
+
+You browse around the filesystem to assess the situation and save the resulting terminal output (your puzzle input). For example:
+
+```
+$ cd /
+$ ls
+dir a
+14848514 b.txt
+8504156 c.dat
+dir d
+$ cd a
+$ ls
+dir e
+29116 f
+2557 g
+62596 h.lst
+$ cd e
+$ ls
+584 i
+$ cd ..
+$ cd ..
+$ cd d
+$ ls
+4060174 j
+8033020 d.log
+5626152 d.ext
+7214296 k
+```
+
+The filesystem consists of a tree of files (plain data) and directories (which can contain other directories or files). The outermost directory is called /. You can navigate around the filesystem, moving into or out of directories and listing the contents of the directory you're currently in.
+
+Within the terminal output, lines that begin with $ are commands you executed, very much like some modern computers:
+
+* cd means change directory. This changes which directory is the current directory, but the specific result depends on the argument:
+* cd x moves in one level: it looks in the current directory for the directory named x and makes it the current directory.
+* cd .. moves out one level: it finds the directory that contains the current directory, then makes that directory the current directory.
+* cd / switches the current directory to the outermost directory, /.
+* ls means list. It prints out all of the files and directories immediately contained by the current directory:
+* 123 abc means that the current directory contains a file named abc with size 123.
+* dir xyz means that the current directory contains a directory named xyz.
+
+Given the commands and output in the example above, you can determine that the filesystem looks visually like this:
+
+```
+- / (dir)
+  - a (dir)
+    - e (dir)
+      - i (file, size=584)
+    - f (file, size=29116)
+    - g (file, size=2557)
+    - h.lst (file, size=62596)
+  - b.txt (file, size=14848514)
+  - c.dat (file, size=8504156)
+  - d (dir)
+    - j (file, size=4060174)
+    - d.log (file, size=8033020)
+    - d.ext (file, size=5626152)
+    - k (file, size=7214296)
+```
+
+Here, there are four directories: / (the outermost directory), a and d (which are in /), and e (which is in a). These directories also contain files of various sizes.
+
+Since the disk is full, your first step should probably be to find directories that are good candidates for deletion. To do this, you need to determine the total size of each directory. The total size of a directory is the sum of the sizes of the files it contains, directly or indirectly. (Directories themselves do not count as having any intrinsic size.)
+
+The total sizes of the directories above can be found as follows:
+
+* The total size of directory e is 584 because it contains a single file i of size 584 and no other directories.
+* The directory a has total size 94853 because it contains files f (size 29116), g (size 2557), and h.lst (size 62596), plus file i indirectly (a contains e which contains i).
+* Directory d has total size 24933642.
+* As the outermost directory, / contains every file. Its total size is 48381165, the sum of the size of every file.
+
+To begin, find all of the directories with a total size of at most 100000, then calculate the sum of their total sizes. In the example above, these directories are a and e; the sum of their total sizes is 95437 (94853 + 584). (As in this example, this process can count files more than once!)
+
+Find all of the directories with a total size of at most 100000. What is the sum of the total sizes of those directories?
+
+## Read in the Data
+
+```elixir
+frame = Kino.Frame.new() |> Kino.render()
+
+input = Kino.Input.textarea("strategy")
+```
+
+1. Read in data
+2. Execute commands beginning with `$`
+3. Gather information into tree of current directory if not beginning with `$`
+
+Make directory structure into Map like:
+
+```
+%{
+   "pwd" => "/",
+   items => []
+}
+%{dir: %{
+    name: "/",
+    size: 48381165
+    dir: %{
+       name: "a",
+       size: 94853
+       dir: %{
+          name: "e",
+          size: 854,
+          file: %{name: "i", size: 584}
+       },
+       file: %{name: "f", size: 29116},
+       file: %{name: "g", size: 2557},
+       file: %{name: "h.lst", size: 62596}
+    },
+    file: %{name: "b.txt", size: 14848514},
+    file: %{name: "c.dat", size: 8504156},
+    dir: %{
+       name: "d",
+       size: 24933642,
+       file: %{name: "j", size: 4060174},
+       file: %{name: "d.log", size: 8033020},
+       file: %{name: "d.ext", size: 5626152},
+       file: %{name: k, size: 7214296}
+    } 
+  }
+}
+```
+
+```elixir
+defmodule Processor do
+  def parse_commands(commands) do
+    Enum.reduce(commands, %{"cwd" => ""}, fn command, state -> parse(state, command) end)
+  end
+
+  def parse(state, command) do
+    if String.starts_with?(command, "$ ") do
+      cmd = String.slice(command, 2..-1)
+
+      cond do
+        String.starts_with?(cmd, "cd ") ->
+          [_cmd, param] = String.split(cmd, " ")
+          cd(state, param)
+
+        "ls" == cmd ->
+          state
+
+        true ->
+          state
+      end
+    else
+      String.split(command, " ")
+      |> add_item(state)
+    end
+  end
+
+  def cd(state, dir) do
+    case dir do
+      "/" ->
+        Map.put(state, "cwd", dir) |> Map.put("/", %{"sizes" => [], "total_size" => 0})
+
+      ".." ->
+        cwd =
+          Map.get(state, "cwd")
+          |> String.replace(~r"/\w+/$", "/")
+
+        Map.put(state, "cwd", cwd)
+
+      _ ->
+        cwd = Map.get(state, "cwd")
+        Map.put(state, "cwd", "#{cwd}#{dir}/")
+    end
+  end
+
+  defp add_item([value, name], state) do
+    path = Map.get(state, "cwd")
+    items = Map.get(state, path)
+
+    cond do
+      "dir" == value ->
+        Map.put(state, "#{path}#{name}/", %{"sizes" => [], "total_size" => 0})
+
+      true ->
+        size = String.to_integer(value)
+
+        items = %{
+          "sizes" => Enum.concat(items["sizes"], [size]),
+          "total_size" => items["total_size"] + size
+        }
+
+        add_size_to_parent(state, path, size)
+        |> Map.put(path, items)
+    end
+  end
+
+  defp add_size_to_parent(state, "/", _), do: state
+
+  defp add_size_to_parent(state, child_path, size) do
+    path = String.replace(child_path, ~r"/\w+/$", "/")
+    items = Map.get(state, path)
+    items = %{items | "total_size" => items["total_size"] + size}
+
+    Map.put(state, path, items)
+    |> add_size_to_parent(path, size)
+  end
+end
+
+dirs =
+  Kino.Input.read(input)
+  |> String.split("\n")
+  |> Processor.parse_commands()
+  |> Map.drop(["cwd"])
+
+Enum.to_list(dirs)
+|> Enum.map(fn {_, %{"total_size" => size}} -> size end)
+|> Enum.filter(fn size -> size <= 100_000 end)
+|> Enum.reduce(0, fn size, acc -> acc + size end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+95437
+```
+
+## Part 2
+
+Now, you're ready to choose a directory to delete.
+
+The total disk space available to the filesystem is 70_000_000. To run the update, you need unused space of at least 30_000_000. You need to find a directory you can delete that will free up enough space to run the update.
+
+In the example above, the total size of the outermost directory (and thus the total amount of used space) is 48_381_165; this means that the size of the unused space must currently be 21_618_835, which isn't quite the 30000000 required by the update. Therefore, the update still requires a directory with total size of at least 8381165 to be deleted before it can run.
+
+To achieve this, you have the following options:
+
+* Delete directory e, which would increase unused space by 584.
+* Delete directory a, which would increase unused space by 94853.
+* Delete directory d, which would increase unused space by 24933642.
+* Delete directory /, which would increase unused space by 48381165.
+* Directories e and a are both too small; deleting them would not free up enough space. However, directories d and / are both big enough! Between these, choose the smallest: d, increasing unused space by 24933642.
+
+Find the smallest directory that, if deleted, would free up enough space on the filesystem to run the update. What is the total size of that directory?
+
+```elixir
+total_used = dirs["/"]["total_size"]
+unused = 70_000_000 - total_used
+needed = 30_000_000 - unused
+
+Enum.to_list(dirs)
+|> Enum.map(fn {_, %{"total_size" => size}} -> size end)
+|> Enum.filter(fn size -> size >= needed end)
+|> Enum.min()
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+24933642
+```
