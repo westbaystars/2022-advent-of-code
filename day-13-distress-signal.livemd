@@ -1,0 +1,242 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# 2023 Advent of Code Day 13
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.7.0"},
+  {:explorer, "~> 0.4.0"}
+])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+## Distress Signal
+
+You climb the hill and again try contacting the Elves. However, you instead receive a signal you weren't expecting: a distress signal.
+
+Your handheld device must still not be working properly; the packets from the distress signal got decoded out of order. You'll need to re-order the list of received packets (your puzzle input) to decode the message.
+
+Your list consists of pairs of packets; pairs are separated by a blank line. You need to identify how many pairs of packets are in the right order.
+
+For example:
+
+```
+[1,1,3,1,1]
+[1,1,5,1,1]
+
+[[1],[2,3,4]]
+[[1],4]
+
+[9]
+[[8,7,6]]
+
+[[4,4],4,4]
+[[4,4],4,4,4]
+
+[7,7,7,7]
+[7,7,7]
+
+[]
+[3]
+
+[[[]]]
+[[]]
+
+[1,[2,[3,[4,[5,6,7]]]],8,9]
+[1,[2,[3,[4,[5,6,0]]]],8,9]
+```
+
+Packet data consists of lists and integers. Each list starts with [, ends with ], and contains zero or more comma-separated values (either integers or other lists). Each packet is always a list and appears on its own line.
+
+When comparing two values, the first value is called left and the second value is called right. Then:
+
+If both values are integers, the lower integer should come first. If the left integer is lower than the right integer, the inputs are in the right order. If the left integer is higher than the right integer, the inputs are not in the right order. Otherwise, the inputs are the same integer; continue checking the next part of the input.
+
+If both values are lists, compare the first value of each list, then the second value, and so on. If the left list runs out of items first, the inputs are in the right order. If the right list runs out of items first, the inputs are not in the right order. If the lists are the same length and no comparison makes a decision about the order, continue checking the next part of the input.
+
+If exactly one value is an integer, convert the integer to a list which contains that integer as its only value, then retry the comparison. For example, if comparing [0,0,0] and 2, convert the right value to [2] (a list containing 2); the result is then found by instead comparing [0,0,0] and [2].
+
+Using these rules, you can determine which of the pairs in the example are in the right order:
+
+```
+== Pair 1 ==
+- Compare [1,1,3,1,1] vs [1,1,5,1,1]
+  - Compare 1 vs 1
+  - Compare 1 vs 1
+  - Compare 3 vs 5
+    - Left side is smaller, so inputs are in the right order
+
+== Pair 2 ==
+- Compare [[1],[2,3,4]] vs [[1],4]
+  - Compare [1] vs [1]
+    - Compare 1 vs 1
+  - Compare [2,3,4] vs 4
+    - Mixed types; convert right to [4] and retry comparison
+    - Compare [2,3,4] vs [4]
+      - Compare 2 vs 4
+        - Left side is smaller, so inputs are in the right order
+
+== Pair 3 ==
+- Compare [9] vs [[8,7,6]]
+  - Compare 9 vs [8,7,6]
+    - Mixed types; convert left to [9] and retry comparison
+    - Compare [9] vs [8,7,6]
+      - Compare 9 vs 8
+        - Right side is smaller, so inputs are not in the right order
+
+== Pair 4 ==
+- Compare [[4,4],4,4] vs [[4,4],4,4,4]
+  - Compare [4,4] vs [4,4]
+    - Compare 4 vs 4
+    - Compare 4 vs 4
+  - Compare 4 vs 4
+  - Compare 4 vs 4
+  - Left side ran out of items, so inputs are in the right order
+
+== Pair 5 ==
+- Compare [7,7,7,7] vs [7,7,7]
+  - Compare 7 vs 7
+  - Compare 7 vs 7
+  - Compare 7 vs 7
+  - Right side ran out of items, so inputs are not in the right order
+
+== Pair 6 ==
+- Compare [] vs [3]
+  - Left side ran out of items, so inputs are in the right order
+
+== Pair 7 ==
+- Compare [[[]]] vs [[]]
+  - Compare [[]] vs []
+    - Right side ran out of items, so inputs are not in the right order
+
+== Pair 8 ==
+- Compare [1,[2,[3,[4,[5,6,7]]]],8,9] vs [1,[2,[3,[4,[5,6,0]]]],8,9]
+  - Compare 1 vs 1
+  - Compare [2,[3,[4,[5,6,7]]]] vs [2,[3,[4,[5,6,0]]]]
+    - Compare 2 vs 2
+    - Compare [3,[4,[5,6,7]]] vs [3,[4,[5,6,0]]]
+      - Compare 3 vs 3
+      - Compare [4,[5,6,7]] vs [4,[5,6,0]]
+        - Compare 4 vs 4
+        - Compare [5,6,7] vs [5,6,0]
+          - Compare 5 vs 5
+          - Compare 6 vs 6
+          - Compare 7 vs 0
+            - Right side is smaller, so inputs are not in the right order
+```
+
+What are the indices of the pairs that are already in the right order? (The first pair has index 1, the second pair has index 2, and so on.) In the above example, the pairs in the right order are 1, 2, 4, and 6; the sum of these indices is 13.
+
+Determine which pairs of packets are already in the right order. What is the sum of the indices of those pairs?
+
+## Read in the Data
+
+```elixir
+frame = Kino.Frame.new() |> Kino.render()
+
+input = Kino.Input.textarea("strategy")
+```
+
+1. Read in data
+2. Group pairs of arrays together
+3. Solve for packets in correct order
+4. Assign indexes
+5. Sum correctly ordered indexes
+
+```elixir
+defmodule Packet do
+  defstruct index: 0, array1: [], array2: [], is_ordered?: false
+
+  def read(input) do
+    input
+    |> String.split("\n\n")
+    |> Enum.map(fn pair -> String.split(pair, "\n") end)
+    |> Enum.map(fn array -> make_packet(array) end)
+    |> Enum.with_index(fn packet, index -> %{packet | index: index + 1} end)
+  end
+
+  def check_packet_order(packet) do
+    %{packet | is_ordered?: compare(packet.array1, packet.array2) == :correct}
+  end
+
+  def list_packets(packets) do
+    Enum.reduce(packets, [{[[2]]}, {[[6]]}], fn packet, array ->
+      [array, [{packet.array1}, {packet.array2}]]
+    end)
+    |> List.flatten()
+    |> Enum.map(fn {array} -> array end)
+  end
+
+  def sort_packets(packets) do
+    Enum.sort(packets, fn a, b -> compare(a, b) == :correct end)
+  end
+
+  defp compare(array1, value2) when is_list(array1) and is_integer(value2),
+    do: compare(array1, [value2])
+
+  defp compare(value1, array2) when is_integer(value1) and is_list(array2),
+    do: compare([value1], array2)
+
+  defp compare([], []), do: :continue
+  defp compare(array1, []) when is_list(array1), do: :incorrect
+  defp compare([], array2) when is_list(array2), do: :correct
+
+  defp compare(value1, value2) when is_integer(value1) and is_integer(value2) do
+    cond do
+      value1 < value2 -> :correct
+      value1 == value2 -> :continue
+      value1 > value2 -> :incorrect
+    end
+  end
+
+  defp compare(array1, array2) when is_list(array1) and is_list(array2) do
+    [value1 | rest1] = array1
+    [value2 | rest2] = array2
+
+    case compare(value1, value2) do
+      :correct -> :correct
+      :continue -> compare(rest1, rest2)
+      :incorrect -> :incorrect
+    end
+  end
+
+  defp make_packet([array1, array2]) do
+    %Packet{
+      array1: parse(array1),
+      array2: parse(array2)
+    }
+  end
+
+  defp parse(string) do
+    {array, _} = Code.eval_string(string)
+    array
+  end
+end
+
+Kino.Input.read(input)
+|> Packet.read()
+|> Enum.map(fn packet -> Packet.check_packet_order(packet) end)
+# |> Enum.reduce(0, fn packet, acc -> if packet.is_ordered? do acc + packet.index else acc end end)
+|> Packet.list_packets()
+|> Packet.sort_packets()
+|> Enum.with_index(1)
+|> Enum.filter(fn {array, _} ->
+  case array do
+    [[2]] -> true
+    [[6]] -> true
+    _ -> false
+  end
+end)
+|> Enum.reduce(1, fn {_, index}, acc -> acc * index end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+140
+```
