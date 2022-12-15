@@ -1,0 +1,345 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# 2023 Advent of Code Day 14
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.7.0"},
+  {:explorer, "~> 0.4.0"}
+])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+## Regolith Reservoir
+
+The distress signal leads you to a giant waterfall! Actually, hang on - the signal seems like it's coming from the waterfall itself, and that doesn't make any sense. However, you do notice a little path that leads behind the waterfall.
+
+Correction: the distress signal leads you behind a giant waterfall! There seems to be a large cave system here, and the signal definitely leads further inside.
+
+As you begin to make your way deeper underground, you feel the ground rumble for a moment. Sand begins pouring into the cave! If you don't quickly figure out where the sand is going, you could quickly become trapped!
+
+Fortunately, your familiarity with analyzing the path of falling material will come in handy here. You scan a two-dimensional vertical slice of the cave above you (your puzzle input) and discover that it is mostly air with structures made of rock.
+
+Your scan traces the path of each solid rock structure and reports the x,y coordinates that form the shape of the path, where x represents distance to the right and y represents distance down. Each path appears as a single line of text in your scan. After the first point of each path, each point indicates the end of a straight horizontal or vertical line to be drawn from the previous point. For example:
+
+```
+498,4 -> 498,6 -> 496,6
+503,4 -> 502,4 -> 502,9 -> 494,9
+```
+
+This scan means that there are two paths of rock; the first path consists of two straight lines, and the second path consists of three straight lines. (Specifically, the first path consists of a line of rock from `498,4 through 498,6` and another line of rock from `498,6 through 496,6`.)
+
+The sand is pouring into the cave from point `500,0`.
+
+Drawing rock as #, air as ., and the source of the sand as +, this becomes:
+
+```
+  4     5  5
+  9     0  0
+  4     0  3
+0 ......+...
+1 ..........
+2 ..........
+3 ..........
+4 ....#...##
+5 ....#...#.
+6 ..###...#.
+7 ........#.
+8 ........#.
+9 #########.
+```
+
+Sand is produced one unit at a time, and the next unit of sand is not produced until the previous unit of sand comes to rest. A unit of sand is large enough to fill one tile of air in your scan.
+
+A unit of sand always falls down one step if possible. If the tile immediately below is blocked (by rock or sand), the unit of sand attempts to instead move diagonally one step down and to the left. If that tile is blocked, the unit of sand attempts to instead move diagonally one step down and to the right. Sand keeps moving as long as it is able to do so, at each step trying to move down, then down-left, then down-right. If all three possible destinations are blocked, the unit of sand comes to rest and no longer moves, at which point the next unit of sand is created back at the source.
+
+So, drawing sand that has come to rest as o, the first unit of sand simply falls straight down and then stops:
+
+```
+......+...
+..........
+..........
+..........
+....#...##
+....#...#.
+..###...#.
+........#.
+......o.#.
+#########.
+```
+
+The second unit of sand then falls straight down, lands on the first one, and then comes to rest to its left:
+
+```
+......+...
+..........
+..........
+..........
+....#...##
+....#...#.
+..###...#.
+........#.
+.....oo.#.
+#########.
+```
+
+After a total of five units of sand have come to rest, they form this pattern:
+
+```
+......+...
+..........
+..........
+..........
+....#...##
+....#...#.
+..###...#.
+......o.#.
+....oooo#.
+#########.
+```
+
+After a total of 22 units of sand:
+
+```
+......+...
+..........
+......o...
+.....ooo..
+....#ooo##
+....#ooo#.
+..###ooo#.
+....oooo#.
+...ooooo#.
+#########.
+```
+
+Finally, only two more units of sand can possibly come to rest:
+
+```
+......+...
+..........
+......o...
+.....ooo..
+....#ooo##
+...o#ooo#.
+..###ooo#.
+....oooo#.
+.o.ooooo#.
+#########.
+```
+
+Once all 24 units of sand shown above have come to rest, all further sand flows out the bottom, falling into the endless void. Just for fun, the path any new sand takes before falling forever is shown here with ~:
+
+```
+.......+...
+.......~...
+......~o...
+.....~ooo..
+....~#ooo##
+...~o#ooo#.
+..~###ooo#.
+..~..oooo#.
+.~o.ooooo#.
+~#########.
+~..........
+~..........
+~..........
+```
+
+Using your scan, simulate the falling sand. How many units of sand come to rest before sand starts flowing into the abyss below?
+
+## Read in the Data
+
+```elixir
+frame = Kino.Frame.new() |> Kino.render()
+
+input = Kino.Input.textarea("strategy")
+```
+
+1. Read in data
+2. Plot scan
+3. Drop sand in from 500,0 until it goes below bottom
+
+```elixir
+defmodule Scanner do
+  defstruct index: 0, left: 500, right: 500, bottom: 0, image: %{}
+
+  @sx 500
+  @sy 0
+
+  def read(input) do
+    input
+    |> String.split("\n")
+    |> Enum.map(fn row -> String.split(row, " -> ") end)
+  end
+
+  def new_scanner(), do: %Scanner{index: 0, left: 500, right: 500, bottom: 0, image: %{}}
+
+  def display(scanner) do
+    Range.new(0, scanner.bottom)
+    |> Enum.map(fn y ->
+      Range.new(scanner.left, scanner.right)
+      |> Enum.map(fn x -> get_at(scanner, x, y) end)
+      |> List.to_string()
+    end)
+  end
+
+  def plot(scanner, lines) do
+    [start | rest] = lines
+    draw_line(scanner, start, rest)
+  end
+
+  def drop_sand(scanner, _, y) when y > scanner.bottom, do: scanner
+
+  def drop_sand(scanner, x, y) do
+    exit = get_at(scanner, @sx, @sy)
+    down = get_at(scanner, x, y + 1)
+    left_down = get_at(scanner, x - 1, y + 1)
+    right_down = get_at(scanner, x + 1, y + 1)
+
+    cond do
+      exit == "o" ->
+        scanner
+
+      down == "." ->
+        drop_sand(scanner, x, y + 1)
+
+      left_down == "." ->
+        drop_sand(scanner, x - 1, y + 1)
+
+      right_down == "." ->
+        drop_sand(scanner, x + 1, y + 1)
+
+      down == "o" or down == "#" ->
+        %Scanner{
+          scanner
+          | index: scanner.index + 1,
+            image: Map.put(scanner.image, make_position(x, y), "o")
+        }
+        |> drop_sand(@sx, @sy)
+
+      true ->
+        scanner
+    end
+  end
+
+  defp draw_line(scanner, _, []), do: scanner
+
+  defp draw_line(scanner, start, rest) do
+    [to | rest] = rest
+    [x1, y1] = get_position(start)
+    [x2, y2] = get_position(to)
+
+    fill_line(scanner, x1, y1, x2, y2)
+    |> draw_line(to, rest)
+  end
+
+  def fill_line(scanner, x1, y1, x2, y2) do
+    %Scanner{
+      scanner
+      | left: min(x1, x2) |> min(scanner.left),
+        right: max(x1, x2) |> max(scanner.right),
+        bottom: max(y1, y2) |> max(scanner.bottom),
+        image:
+          cond do
+            x1 == x2 ->
+              Range.new(y1, y2)
+              |> Enum.reduce(scanner.image, fn y, image ->
+                Map.put(image, make_position(x1, y), "#")
+              end)
+
+            y1 == y2 ->
+              Range.new(x1, x2)
+              |> Enum.reduce(scanner.image, fn x, image ->
+                Map.put(image, make_position(x, y1), "#")
+              end)
+
+            true ->
+              scanner.image
+          end
+    }
+  end
+
+  defp get_position(pair) do
+    String.split(pair, ",") |> Enum.map(fn v -> String.to_integer(v) end)
+  end
+
+  defp make_position(x, y), do: "#{x},#{y}"
+
+  defp get_at(scanner, x, y), do: Map.get(scanner.image, make_position(x, y), ".")
+end
+
+scanner =
+  Kino.Input.read(input)
+  |> Scanner.read()
+  |> Enum.reduce(Scanner.new_scanner(), fn lines, image -> Scanner.plot(image, lines) end)
+
+Scanner.fill_line(scanner, 0, scanner.bottom + 2, 1000, scanner.bottom + 2)
+|> Scanner.drop_sand(500, 0)
+
+# |> Scanner.display()
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%Scanner{
+  index: 93,
+  left: 0,
+  right: 1000,
+  bottom: 11,
+  image: %{
+    "577,11" => "#",
+    "873,11" => "#",
+    "20,11" => "#",
+    "498,11" => "#",
+    "630,11" => "#",
+    "4,11" => "#",
+    "551,11" => "#",
+    "503,3" => "o",
+    "829,11" => "#",
+    "392,11" => "#",
+    "553,11" => "#",
+    "418,11" => "#",
+    "767,11" => "#",
+    "225,11" => "#",
+    "284,11" => "#",
+    "506,8" => "o",
+    "23,11" => "#",
+    "783,11" => "#",
+    "424,11" => "#",
+    "693,11" => "#",
+    "838,11" => "#",
+    "198,11" => "#",
+    "428,11" => "#",
+    "360,11" => "#",
+    "72,11" => "#",
+    "872,11" => "#",
+    "680,11" => "#",
+    "195,11" => "#",
+    "569,11" => "#",
+    "200,11" => "#",
+    "70,11" => "#",
+    "438,11" => "#",
+    "13,11" => "#",
+    "447,11" => "#",
+    "703,11" => "#",
+    "129,11" => "#",
+    "94,11" => "#",
+    "836,11" => "#",
+    "720,11" => "#",
+    "818,11" => "#",
+    "908,11" => "#",
+    "520,11" => "#",
+    "791,11" => "#",
+    "696,11" => "#",
+    "605,11" => "#",
+    ...
+  }
+}
+```
